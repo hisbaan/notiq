@@ -124,7 +124,8 @@ work, before building the pipeline.
 - [x] Experiments: post a test OTP notification from Notiq itself, copy codes to the
       clipboard from the listener (toggle), rebind the listener, CDM association
 - [x] Copy the probe log as text, for sharing / pasting into notes
-- [ ] On the phone, record results in §4:
+- [x] On the phone, record results in §4 (the rest left open on 2026-10-25 to start Phase 1;
+      the user confirmed background clipboard writes work):
   - [ ] Is Notiq's own test OTP notification redacted to Notiq before the grant?
   - [ ] Real SMS code before the grant: redacted?
   - [ ] Shizuku grant: does `allow_listener` alone make the listener trusted, or is a rebind
@@ -134,21 +135,61 @@ work, before building the pipeline.
   - [ ] Does a sideloaded (adb-installed) build need restricted settings at all?
   - [ ] Clipboard write from the listener with the app in the background: works? Toast?
         Does Gboard offer the sensitive clip?
-  - [ ] Google Messages: muted conversation, conversation open on screen, second message in
-        the same conversation (update vs new, which messages are present)
+  - [ ] Google Messages: muted conversation, conversation open on screen (a second message in
+        the same conversation: see Phase 1)
   - [ ] RCS code, email code (Gmail), in-app code (any) for format notes
 
 ### Phase 1 — MVP
 
-- [ ] Harden `OtpExtractor` against a corpus of real messages (anonymized), incl. negatives
-- [ ] Pipeline: `Source` → `Message` → extractor → dedupe (same code within 2 min) → actions
-- [ ] MessagingStyle updates: newest message only, by timestamp; skip codes already seen
-- [ ] Clipboard action: sensitive flag, auto-clear after N seconds (default 60) if unchanged
-- [ ] Notiq notification: code large, Copy / Dismiss
-- [ ] App allow-list (messaging apps default, email opt-in)
-- [ ] Recent codes screen (in memory, expires after a few minutes)
-- [ ] Redaction alarm: redacted notification from an allowed app → alert + Shizuku re-grant
-- [ ] Settings (DataStore)
+Design decisions for this phase:
+
+- **Sources** (settings): known messaging apps (on), email apps (off), any app when Android
+  flags the notification as containing a code (on; `Ranking.hasSensitiveContent` by
+  reflection, so Pixel / ASI only), any app at all (off; extractor only).
+- **Skipped before reading:** ongoing notifications, group summaries, media players
+  (MediaStyle / `transport`), Notiq's own (except the test channel).
+- **Which text:** MessagingStyle → the newest message only. Otherwise title + big text (or
+  text), so a code in either is found.
+- **Newness and dedupe** (`CodeFilter`, `:core`): per notification key, only messages newer
+  than the last one acted on; messages over 10 min old are ignored; the same code within
+  2 min is acted on once (SMS + RCS + an email of the same code, or re-posts).
+- **Extractor:** marketing messages ("Use code SAVE20 at checkout") are rejected unless they
+  also carry a strong code signal (one-time, verification, passcode, "don't share", ...).
+- **Actions:** copy to the clipboard, marked sensitive (on). Notiq's own notification with the
+  code and a Copy button: silent, times out after 10 min, replaced by the next code (on).
+  Recent codes on the home screen, in memory, for 10 min.
+- **Clipboard clearing** (off by default): only if the clipboard still holds Notiq's copy. A
+  background app may write or clear the clipboard but not read it (`ClipboardService.
+  clipboardAccessAllowed`: reads need focus or the default IME), and there's no `cmd clipboard`.
+  The shell holds `READ_CLIPBOARD_IN_BACKGROUND`, so the Shizuku user service calls the hidden
+  `IClipboard.getPrimaryClipDescription` (by reflection) and Notiq compares a random tag it put
+  in the description's extras. Only the description: reading the clip itself makes Android show
+  a "Shell pasted from your clipboard" toast. Locked → nothing is readable, so retry every 15 s
+  for up to 10 min. Shizuku not running → leave it alone. Verified on the Pixel 2026-10-25:
+  cleared when untouched, left alone after another copy. The first call after the app starts
+  waits a few seconds for Shizuku to start the user service.
+- **Redaction alarm:** a redacted notification from an accepted source means the grant is
+  gone. If Shizuku is ready, re-run setup (at most every 10 min), then rescan the shade:
+  `getActiveNotifications` checks trust at call time, so the code is recovered. Otherwise an
+  alert notification opens the app's setup.
+- **Diagnostics:** the Phase 0 probe becomes a Diagnostics screen (log in memory, experiments).
+  The file copy (`files/diagnostics.txt`) is only written in debuggable builds, and is cut back
+  to its newest 256 KB once it passes 512 KB. In memory: the last 300 notifications and events.
+
+Tasks:
+
+- [x] `:core`: `Message`, `SourcePolicy`, `CodeFilter`, extractor hardening, tests
+- [x] Listener → reader → pipeline → actions
+- [x] Clipboard (sensitive, optional clear), code notification with Copy, recent codes
+- [x] Redaction alarm: Shizuku re-grant + rescan, or alert notification
+- [x] Settings screen; home screen (setup when incomplete, recent codes); Diagnostics screen
+- [x] Clipboard clearing checks the clipboard still holds the code (Shizuku)
+- [x] Debug-only adb hook: `adb shell am broadcast -n com.hisbaan.notiq/.DebugReceiver --es action
+      copy|text|test ...` (see `DebugReceiver`)
+- [x] On the phone: real SMS end to end (2026-10-25). Two codes in one thread: the second came as
+      an UPDATE carrying both messages, and only the newest (365231) was taken and copied,
+      about 3 s after the message's timestamp.
+- [ ] Not yet tried on the phone: revoke → alarm → re-grant → recovery; clearing while locked
 
 ### Phase 2 — Accessibility fill (opt-in)
 
