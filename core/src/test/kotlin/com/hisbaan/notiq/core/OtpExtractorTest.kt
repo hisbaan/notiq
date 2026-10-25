@@ -74,4 +74,36 @@ class OtpExtractorTest {
     fun `rejects numbers too long to be codes`() {
         assertNull(code("Your verification reference is 123456789012"))
     }
+
+    @Test
+    fun `real-world formats`() {
+        assertEquals("017424", code("[Project Name Not Rendered in Test] verification code: 017424"))
+        assertEquals("482913", code("<#> Your Amazon OTP is 482913. Do not share it with anyone. FA+9qCX9VSu"))
+        assertEquals(
+            "482913",
+            code(
+                "Your WhatsApp code: 482-913\nYou can also tap on this link to verify your phone: " +
+                    "v.whatsapp.com/482913\nDon't share this code with others",
+            ),
+        )
+        assertEquals("48291", code("Telegram code: 48291\n\nYou can also tap on this link to log in:\nhttps://t.me/login/48291"))
+        assertEquals("482913", code("PayPal: Your security code is: 482913. Your code expires in 10 minutes. Please don't reply."))
+        assertEquals("4X9KD", code("Your Steam Guard code is: 4X9KD"))
+        assertEquals("482913", code("Your Apple Account code is: 482913. Don't share it with anyone.\n\n@apple.com #482913 %apple.com"))
+        assertEquals("4829", code("Uber: Your Uber code: 4829. Never share this code. Reply STOP ALL to +1 415-237-0403 to unsubscribe."))
+        assertEquals("482913", code("Use 482913 to verify your Discord account."))
+        assertEquals("482913", code("RBC: Your one-time passcode is 482913. It expires in 5 minutes. Do not share."))
+    }
+
+    @Test
+    fun `rejects marketing`() {
+        assertNull(code("Use code 20OFF at checkout"))
+        assertNull(code("Flash sale! Use code 2026 for free shipping"))
+        assertNull(code("Save 15% with code WELCOME15 on your next order"))
+    }
+
+    @Test
+    fun `rejects tracking numbers`() {
+        assertNull(code("Your package with tracking code 1Z999AA10123456784 has shipped"))
+    }
 }
