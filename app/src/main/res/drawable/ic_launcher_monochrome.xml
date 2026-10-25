@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed icon layer: the system tints it, so only the shape matters. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M38,36h32a8,8 0,0 1,8 8v16a8,8 0,0 1,-8 8h-22l-10,10v-10a8,8 0,0 1,-8 -8v-16a8,8 0,0 1,8 -8zM38.5,52a3.5,3.5 0,1 0,7 0a3.5,3.5 0,1 0,-7 0zM50.5,52a3.5,3.5 0,1 0,7 0a3.5,3.5 0,1 0,-7 0zM62.5,52a3.5,3.5 0,1 0,7 0a3.5,3.5 0,1 0,-7 0z" />
+</vector>
