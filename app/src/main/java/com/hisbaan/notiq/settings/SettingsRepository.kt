@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.hisbaan.notiq.core.SourcePolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,9 +19,20 @@ import kotlinx.serialization.json.Json
 
 @Serializable
 data class NotiqSettings(
-    /** Copy every extracted code to the clipboard. */
-    val copyCodes: Boolean = false,
-)
+    /** Copy each code to the clipboard as it arrives. */
+    val copyCodes: Boolean = true,
+    /** Post Notiq's own notification with the code and a Copy button. */
+    val showNotification: Boolean = true,
+    /** Clear the clipboard this long after copying a code, if it still holds it; 0 never. */
+    val clearAfterSeconds: Int = 0,
+    // Sources, see SourcePolicy.
+    val messagingApps: Boolean = true,
+    val emailApps: Boolean = false,
+    val systemFlagged: Boolean = true,
+    val allApps: Boolean = false,
+) {
+    val sources: SourcePolicy get() = SourcePolicy(messagingApps, emailApps, systemFlagged, allApps)
+}
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 

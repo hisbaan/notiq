@@ -6,6 +6,7 @@ import android.content.ServiceConnection
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.IBinder
+import android.os.Process
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,6 +71,10 @@ class ShizukuShell(private val context: Context) {
         return ShellResult(result.getInt(ShellService.EXIT), result.getString(ShellService.OUTPUT).orEmpty())
     }
 
+    /** See IShellService.clipDescriptionExtra. Throws if Shizuku isn't ready. */
+    suspend fun clipDescriptionExtra(key: String): String? =
+        withContext(Dispatchers.IO) { service().clipDescriptionExtra(currentUser(), key) }
+
     private suspend fun service(): IShellService = mutex.withLock {
         service?.takeIf { it.asBinder().pingBinder() } ?: withContext(Dispatchers.Main) {
             withTimeout(BIND_TIMEOUT_MS) {
@@ -99,9 +104,15 @@ class ShizukuShell(private val context: Context) {
         false
     }
 
-    private companion object {
-        const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
-        const val PERMISSION_REQUEST = 1
-        const val BIND_TIMEOUT_MS = 10_000L
+    companion object {
+        /** The Android user Notiq runs as, for shell commands that take one. */
+        fun currentUser(): Int = Process.myUid() / PER_USER_RANGE
+
+        private const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
+        private const val PERMISSION_REQUEST = 1
+        private const val BIND_TIMEOUT_MS = 10_000L
+
+        /** UserHandle.PER_USER_RANGE: uid = user * this + app id. */
+        private const val PER_USER_RANGE = 100_000
     }
 }

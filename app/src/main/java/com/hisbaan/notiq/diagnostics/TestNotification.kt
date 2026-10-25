@@ -1,4 +1,4 @@
-package com.hisbaan.notiq.probe
+package com.hisbaan.notiq.diagnostics
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -16,7 +16,7 @@ import kotlin.random.Random
  * waiting for a real SMS. Shaped like a messaging app's conversation notification.
  */
 object TestNotification {
-    private const val CHANNEL = "test"
+    const val CHANNEL = "test"
     private const val ID = 1
 
     fun createChannel(context: Context) {

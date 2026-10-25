@@ -11,23 +11,32 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hisbaan.notiq.diagnostics.TestNotification
 import com.hisbaan.notiq.listener.NotiqListener
-import com.hisbaan.notiq.probe.Clipboard
-import com.hisbaan.notiq.probe.TestNotification
-import com.hisbaan.notiq.ui.MainActions
-import com.hisbaan.notiq.ui.MainScreen
-import com.hisbaan.notiq.ui.MainState
+import com.hisbaan.notiq.settings.NotiqSettings
+import com.hisbaan.notiq.ui.DiagnosticsActions
+import com.hisbaan.notiq.ui.DiagnosticsScreen
+import com.hisbaan.notiq.ui.DiagnosticsState
+import com.hisbaan.notiq.ui.HomeScreen
 import com.hisbaan.notiq.ui.NotiqTheme
+import com.hisbaan.notiq.ui.SettingsScreen
+import com.hisbaan.notiq.ui.SetupActions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private enum class Screen { HOME, SETTINGS, DIAGNOSTICS }
+
     private val app get() = application as NotiqApp
 
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -41,7 +50,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val actions = MainActions(
+        val setupActions = SetupActions(
             openListenerSettings = {
                 startActivity(
                     Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
@@ -50,6 +59,7 @@ class MainActivity : ComponentActivity() {
             },
             requestNotifications = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
             requestBattery = {
+                // Notiq's only job is reacting to notifications in the background.
                 startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.fromParts("package", packageName, null)))
             },
             openAppInfo = {
@@ -57,25 +67,49 @@ class MainActivity : ComponentActivity() {
             },
             requestShizuku = app.shizuku::requestPermission,
             setUpWithShizuku = { app.scope.launch { app.grants.setUp() } },
-            revokeWithShizuku = { app.scope.launch { app.grants.revokeSensitive() } },
-            copyAdbCommand = { Clipboard.copyText(this, "adb command", app.grants.adbCommand) },
+            copyAdbCommand = { app.clipboard.copyText("adb command", app.grants.adbCommand) },
+        )
+        val diagnosticsActions = DiagnosticsActions(
             postTestCode = ::postTestCode,
-            setCopyCodes = { value -> app.scope.launch { app.settings.update { it.copy(copyCodes = value) } } },
             rebindListener = { NotiqListener.rebind(app) },
+            grantWithShizuku = { app.scope.launch { app.grants.setUp() } },
+            revokeWithShizuku = { app.scope.launch { app.grants.revokeSensitive() } },
             associate = ::associate,
             disassociateAll = ::disassociateAll,
-            copyLog = { Clipboard.copyText(this, "Notiq probe log", app.probe.export()) },
-            clearLog = app.probe::clear,
+            copyLog = { app.clipboard.copyText("Notiq diagnostics", app.diagnostics.export()) },
+            clearLog = app.diagnostics::clear,
         )
+        val update = { transform: (NotiqSettings) -> NotiqSettings -> app.scope.launch { app.settings.update(transform) }; Unit }
         setContent {
             NotiqTheme {
                 val setup by app.setup.collectAsStateWithLifecycle()
                 val shizuku by app.shizuku.state.collectAsStateWithLifecycle()
                 val granting by app.grants.running.collectAsStateWithLifecycle()
                 val settings by app.settings.settings.collectAsStateWithLifecycle()
-                val entries by app.probe.entries.collectAsStateWithLifecycle()
-                val events by app.probe.events.collectAsStateWithLifecycle()
-                MainScreen(MainState(setup, shizuku, granting, app.grants.adbCommand, settings?.copyCodes ?: false, entries, events), actions)
+                val codes by app.pipeline.recent.collectAsStateWithLifecycle()
+                val notifications by app.diagnostics.notifications.collectAsStateWithLifecycle()
+                val events by app.diagnostics.events.collectAsStateWithLifecycle()
+                var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
+                BackHandler(enabled = screen != Screen.HOME) { screen = Screen.HOME }
+                when (screen) {
+                    Screen.HOME -> HomeScreen(
+                        setup,
+                        shizuku,
+                        granting,
+                        app.grants.adbCommand,
+                        codes,
+                        setupActions,
+                        copyCode = { app.clipboard.copyCode(it, settings?.clearAfterSeconds ?: 0) },
+                        openSettings = { screen = Screen.SETTINGS },
+                        openDiagnostics = { screen = Screen.DIAGNOSTICS },
+                    )
+                    Screen.SETTINGS -> settings?.let { SettingsScreen(it, update, onBack = { screen = Screen.HOME }) }
+                    Screen.DIAGNOSTICS -> DiagnosticsScreen(
+                        DiagnosticsState(setup, shizuku, granting, notifications, events),
+                        diagnosticsActions,
+                        onBack = { screen = Screen.HOME },
+                    )
+                }
             }
         }
     }
@@ -84,6 +118,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         app.refreshSetup()
         app.shizuku.refresh()
+        app.pipeline.prune()
     }
 
     private fun postTestCode() {
@@ -91,7 +126,7 @@ class MainActivity : ComponentActivity() {
         app.scope.launch {
             delay(5_000)
             val code = TestNotification.post(app)
-            app.probe.event(if (code != null) "Posted test code $code" else "Test code not posted: no notification permission")
+            app.diagnostics.event(if (code != null) "Posted test code $code" else "Test code not posted: no notification permission")
         }
     }
 
@@ -108,12 +143,12 @@ class MainActivity : ComponentActivity() {
                 }
 
                 override fun onAssociationCreated(associationInfo: AssociationInfo) {
-                    app.probe.event("Companion association created: ${associationInfo.displayName ?: associationInfo.id}")
+                    app.diagnostics.event("Companion association created: ${associationInfo.displayName ?: associationInfo.id}")
                     app.refreshSetup()
                 }
 
                 override fun onFailure(error: CharSequence?) {
-                    app.probe.event("Companion association failed: $error")
+                    app.diagnostics.event("Companion association failed: $error")
                 }
             },
         )
@@ -122,7 +157,7 @@ class MainActivity : ComponentActivity() {
     private fun disassociateAll() {
         val manager = getSystemService(CompanionDeviceManager::class.java) ?: return
         manager.myAssociations.forEach { manager.disassociate(it.id) }
-        app.probe.event("Companion associations removed")
+        app.diagnostics.event("Companion associations removed")
         app.refreshSetup()
     }
 }

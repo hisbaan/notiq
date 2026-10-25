@@ -43,6 +43,11 @@
             </intent-filter>
         </service>
 
+        <!-- The Copy button on a code notification. -->
+        <receiver
+            android:name=".actions.CopyCodeReceiver"
+            android:exported="false" />
+
         <!-- Shizuku hands its binder to the app through this. -->
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

@@ -25,6 +25,11 @@ data class SetupStatus(
      */
     enum class Sensitive { ALLOWED, NOT_ALLOWED, UNKNOWN }
 
+    /** Unknown counts as fine: that Android version doesn't hide codes from listeners. */
+    val sensitiveOk: Boolean get() = sensitive != Sensitive.NOT_ALLOWED
+
+    val complete: Boolean get() = listenerEnabled && sensitiveOk && postNotifications && battery
+
     companion object {
         fun check(context: Context): SetupStatus {
             fun granted(permission: String) = context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED

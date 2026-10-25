@@ -1,15 +1,15 @@
 package com.hisbaan.notiq.setup
 
-import android.os.Process
 import com.hisbaan.notiq.NotiqApp
 import com.hisbaan.notiq.listener.NotiqListener
+import com.hisbaan.notiq.shizuku.ShizukuShell
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /** Setup steps that need shell access: run through Shizuku, or shown as adb commands. */
 class Grants(private val app: NotiqApp) {
     private val pkg = app.packageName
-    private val user = (Process.myUid() / PER_USER_RANGE).toString()
+    private val user = ShizukuShell.currentUser().toString()
     private val listener = NotiqListener.component(app).flattenToString()
 
     /**
@@ -62,7 +62,7 @@ class Grants(private val app: NotiqApp) {
         for (command in commands) {
             val line = command.joinToString(" ")
             val result = runCatching { app.shizuku.run(command) }
-            app.probe.event(
+            app.diagnostics.event(
                 result.fold(
                     { "$ $line → exit ${it.exitCode}${if (it.output.isNotEmpty()) ": ${it.output}" else ""}" },
                     { "$ $line → failed: $it" },
@@ -73,8 +73,5 @@ class Grants(private val app: NotiqApp) {
 
     private companion object {
         const val SENSITIVE_OP = "RECEIVE_SENSITIVE_NOTIFICATIONS"
-
-        /** UserHandle.PER_USER_RANGE: uid = user * this + app id. */
-        const val PER_USER_RANGE = 100_000
     }
 }
