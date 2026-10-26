@@ -16,6 +16,9 @@ import kotlinx.coroutines.launch
  *       Copies plain text, standing in for the user copying something else.
  *   adb shell am broadcast -n com.hisbaan.notiq/.DebugReceiver --es action test
  *       Posts the test code notification, which goes through the whole pipeline.
+ *   adb shell am broadcast -n com.hisbaan.notiq/.DebugReceiver --es action email \
+ *           --es sender GitHub --es subject "[GitHub] Please verify your device" --es body "Verification code: 482913"
+ *       Posts a Gmail-shaped test notification (test channel, so it counts as a source).
  */
 class DebugReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -29,6 +32,15 @@ class DebugReceiver : BroadcastReceiver() {
             "text" -> {
                 app.clipboard.copyText("Debug", intent.getStringExtra("text") ?: "hello")
                 app.diagnostics.event("Debug: copied text")
+            }
+            "email" -> {
+                val posted = TestNotification.postEmail(
+                    app,
+                    intent.getStringExtra("sender") ?: "Notiq Test",
+                    intent.getStringExtra("subject") ?: "Your verification code",
+                    intent.getStringExtra("body") ?: "Your verification code is 482913.",
+                )
+                app.diagnostics.event("Debug: ${if (posted) "posted" else "couldn't post"} test email")
             }
             "test" -> app.scope.launch {
                 app.diagnostics.event("Debug: posted test code ${TestNotification.post(app)}")

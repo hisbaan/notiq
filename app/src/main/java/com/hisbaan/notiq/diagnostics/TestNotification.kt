@@ -18,6 +18,7 @@ import kotlin.random.Random
 object TestNotification {
     const val CHANNEL = "test"
     private const val ID = 1
+    private const val EMAIL_ID = 2
 
     fun createChannel(context: Context) {
         val channel = NotificationChannel(CHANNEL, "Test codes", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -45,5 +46,20 @@ object TestNotification {
             .build()
         NotificationManagerCompat.from(context).notify(ID, notification)
         return code
+    }
+
+    /** Shaped like Gmail's: sender as title, subject as text, the whole email as big text. */
+    fun postEmail(context: Context, sender: String, subject: String, body: String): Boolean {
+        if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
+        val notification = NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setCategory(NotificationCompat.CATEGORY_EMAIL)
+            .setContentTitle(sender)
+            .setContentText(subject)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$subject\n$body"))
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(context).notify(EMAIL_ID, notification)
+        return true
     }
 }

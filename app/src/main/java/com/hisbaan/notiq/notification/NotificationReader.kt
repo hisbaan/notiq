@@ -73,6 +73,8 @@ object NotificationReader {
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
+            // InboxStyle (Gmail with several new emails): a line per email, no body.
+            ?: extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.joinToString("\n")
         val messages = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(notification)
             ?.messages.orEmpty()
             .sortedBy { it.timestamp }
