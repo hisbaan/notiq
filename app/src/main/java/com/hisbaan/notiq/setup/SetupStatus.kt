@@ -1,13 +1,17 @@
 package com.hisbaan.notiq.setup
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AppOpsManager
 import android.companion.CompanionDeviceManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.PowerManager
 import android.os.Process
+import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationManagerCompat
+import com.hisbaan.notiq.fill.FillService
 import com.hisbaan.notiq.listener.NotiqListener
 
 /** What Notiq needs from the user, as far as the app can tell. */
@@ -18,6 +22,8 @@ data class SetupStatus(
     val sensitive: Sensitive = Sensitive.UNKNOWN,
     val battery: Boolean = false,
     val companionAssociations: Int = 0,
+    /** The accessibility service that fills codes. Optional: copying works without it. */
+    val fillService: Boolean = false,
 ) {
     /**
      * The RECEIVE_SENSITIVE_NOTIFICATIONS app-op. ALLOWED isn't the whole story: the system only
@@ -40,6 +46,9 @@ data class SetupStatus(
                 sensitive = sensitive(context),
                 battery = context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName),
                 companionAssociations = context.getSystemService(CompanionDeviceManager::class.java)?.myAssociations?.size ?: 0,
+                fillService = context.getSystemService(AccessibilityManager::class.java)
+                    .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+                    .any { ComponentName.unflattenFromString(it.id) == FillService.component(context) },
             )
         }
 

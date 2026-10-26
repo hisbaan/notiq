@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.hisbaan.notiq.core.FillMode
 import com.hisbaan.notiq.core.SourcePolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,6 +31,10 @@ data class NotiqSettings(
     val emailApps: Boolean = false,
     val systemFlagged: Boolean = true,
     val allApps: Boolean = false,
+    /** How a likely code field gets the code, when the fill service is on. */
+    val fillMode: FillMode = FillMode.CHIP,
+    /** After filling, press Enter if the app hasn't moved on by itself. */
+    val submitAfterFill: Boolean = true,
 ) {
     val sources: SourcePolicy get() = SourcePolicy(messagingApps, emailApps, systemFlagged, allApps)
 }

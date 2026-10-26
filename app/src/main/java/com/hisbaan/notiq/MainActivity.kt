@@ -24,9 +24,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hisbaan.notiq.diagnostics.TestNotification
 import com.hisbaan.notiq.listener.NotiqListener
 import com.hisbaan.notiq.settings.NotiqSettings
+import com.hisbaan.notiq.shizuku.ShizukuShell
 import com.hisbaan.notiq.ui.DiagnosticsActions
 import com.hisbaan.notiq.ui.DiagnosticsScreen
 import com.hisbaan.notiq.ui.DiagnosticsState
+import com.hisbaan.notiq.ui.FillSetup
+import com.hisbaan.notiq.ui.FillTestScreen
 import com.hisbaan.notiq.ui.HomeScreen
 import com.hisbaan.notiq.ui.NotiqTheme
 import com.hisbaan.notiq.ui.SettingsScreen
@@ -35,7 +38,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    private enum class Screen { HOME, SETTINGS, DIAGNOSTICS }
+    private enum class Screen(val parent: Screen?) {
+        HOME(null),
+        SETTINGS(HOME),
+        FILL_TEST(SETTINGS),
+        DIAGNOSTICS(HOME),
+    }
 
     private val app get() = application as NotiqApp
 
@@ -90,7 +98,7 @@ class MainActivity : ComponentActivity() {
                 val notifications by app.diagnostics.notifications.collectAsStateWithLifecycle()
                 val events by app.diagnostics.events.collectAsStateWithLifecycle()
                 var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
-                BackHandler(enabled = screen != Screen.HOME) { screen = Screen.HOME }
+                BackHandler(enabled = screen.parent != null) { screen.parent?.let { screen = it } }
                 when (screen) {
                     Screen.HOME -> HomeScreen(
                         setup,
@@ -103,7 +111,18 @@ class MainActivity : ComponentActivity() {
                         openSettings = { screen = Screen.SETTINGS },
                         openDiagnostics = { screen = Screen.DIAGNOSTICS },
                     )
-                    Screen.SETTINGS -> settings?.let { SettingsScreen(it, update, onBack = { screen = Screen.HOME }) }
+                    Screen.SETTINGS -> settings?.let {
+                        val fill = FillSetup(
+                            serviceOn = setup.fillService,
+                            shizukuReady = shizuku == ShizukuShell.State.READY,
+                            granting = granting,
+                            enableWithShizuku = { app.scope.launch { app.grants.enableFillService() } },
+                            openAccessibilitySettings = ::openFillServiceSettings,
+                            openTryIt = { screen = Screen.FILL_TEST },
+                        )
+                        SettingsScreen(it, fill, update, onBack = { screen = Screen.HOME })
+                    }
+                    Screen.FILL_TEST -> FillTestScreen(sendTestCode = ::postTestCode, onBack = { screen = Screen.SETTINGS })
                     Screen.DIAGNOSTICS -> DiagnosticsScreen(
                         DiagnosticsState(setup, shizuku, granting, notifications, events),
                         diagnosticsActions,
@@ -119,6 +138,10 @@ class MainActivity : ComponentActivity() {
         app.refreshSetup()
         app.shizuku.refresh()
         app.pipeline.prune()
+    }
+
+    private fun openFillServiceSettings() {
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
 
     private fun postTestCode() {

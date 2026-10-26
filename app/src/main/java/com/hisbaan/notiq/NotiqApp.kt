@@ -7,6 +7,7 @@ import com.hisbaan.notiq.actions.CodeNotification
 import com.hisbaan.notiq.codes.CodePipeline
 import com.hisbaan.notiq.diagnostics.DiagnosticsLog
 import com.hisbaan.notiq.diagnostics.TestNotification
+import com.hisbaan.notiq.fill.FillController
 import com.hisbaan.notiq.settings.SettingsRepository
 import com.hisbaan.notiq.setup.AccessGuard
 import com.hisbaan.notiq.setup.Grants
@@ -38,6 +39,8 @@ class NotiqApp : Application() {
         private set
     lateinit var pipeline: CodePipeline
         private set
+    lateinit var fill: FillController
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -49,6 +52,7 @@ class NotiqApp : Application() {
         access = AccessGuard(this)
         clipboard = Clipboard(this)
         pipeline = CodePipeline(this)
+        fill = FillController(this)
         CodeNotification.createChannel(this)
         AccessGuard.createChannel(this)
         TestNotification.createChannel(this)

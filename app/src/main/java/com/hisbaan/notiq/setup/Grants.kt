@@ -1,6 +1,7 @@
 package com.hisbaan.notiq.setup
 
 import com.hisbaan.notiq.NotiqApp
+import com.hisbaan.notiq.fill.FillService
 import com.hisbaan.notiq.listener.NotiqListener
 import com.hisbaan.notiq.shizuku.ShizukuShell
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,6 +12,7 @@ class Grants(private val app: NotiqApp) {
     private val pkg = app.packageName
     private val user = ShizukuShell.currentUser().toString()
     private val listener = NotiqListener.component(app).flattenToString()
+    private val fillService = FillService.component(app).flattenToString()
 
     /**
      * Everything setup needs, in order. The listener is (re)enabled after the app-op is set:
@@ -38,20 +40,40 @@ class Grants(private val app: NotiqApp) {
     val adbCommand: String =
         "adb shell cmd appops set --user $user $pkg $SENSITIVE_OP allow && adb shell cmd notification allow_listener $listener $user"
 
-    suspend fun setUp() = runAll(setUpCommands)
+    suspend fun setUp() = exclusive { runEach(setUpCommands) }
 
-    suspend fun revokeSensitive() = runAll(revokeCommands)
+    suspend fun revokeSensitive() = exclusive { runEach(revokeCommands) }
+
+    /**
+     * Turns on the fill service. The setting is one colon-separated list for every accessibility
+     * service, so read it and add Notiq's: writing just Notiq's would turn the others off.
+     */
+    suspend fun enableFillService() = exclusive {
+        val read = runCatching { app.shizuku.run(listOf("settings", "get", "--user", user, "secure", ENABLED_SERVICES)) }.getOrNull()
+        if (read == null || !read.ok) {
+            app.diagnostics.event("Couldn't read enabled accessibility services: ${read?.output}")
+            return@exclusive
+        }
+        val enabled = read.output.trim().takeUnless { it == "null" }.orEmpty().split(':').filter { it.isNotBlank() }
+        val updated = (enabled + fillService).distinct().joinToString(":")
+        runEach(
+            listOf(
+                listOf("settings", "put", "--user", user, "secure", ENABLED_SERVICES, updated),
+                listOf("settings", "put", "--user", user, "secure", "accessibility_enabled", "1"),
+            ),
+        )
+    }
 
     private val _running = MutableStateFlow(false)
 
-    /** A set-up or revoke is in progress; another tap is ignored until it's done. */
+    /** Something is running through Shizuku; another tap is ignored until it's done. */
     val running: StateFlow<Boolean> = _running
 
-    private suspend fun runAll(commands: List<List<String>>) {
+    private suspend fun exclusive(block: suspend () -> Unit) {
         if (_running.value) return
         _running.value = true
         try {
-            runEach(commands)
+            block()
         } finally {
             _running.value = false
         }
@@ -73,5 +95,6 @@ class Grants(private val app: NotiqApp) {
 
     private companion object {
         const val SENSITIVE_OP = "RECEIVE_SENSITIVE_NOTIFICATIONS"
+        const val ENABLED_SERVICES = "enabled_accessibility_services"
     }
 }

@@ -38,6 +38,7 @@ class CodePipeline(private val app: NotiqApp) {
             _recent.update { listOf(found) + it.filter { c -> now - c.at < RECENT_MS } }
             if (settings.copyCodes) app.clipboard.copyCode(code, settings.clearAfterSeconds)
             if (settings.showNotification) CodeNotification.post(app, found, copied = settings.copyCodes)
+            app.fill.offer(found)
             app.diagnostics.event("Code from ${message.app}${if (settings.copyCodes) ", copied" else ""}")
         }
     }

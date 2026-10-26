@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Notiq</string>
+    <string name="fill_service_label">Notiq code filling</string>
+    <string name="fill_service_description">Fills one-time codes Notiq finds in your messages into the field asking for them. It only looks at the screen for a few minutes after a code arrives, only at the field you\'re typing in and the text around it, and nothing it sees is stored or sent anywhere.</string>
 </resources>
