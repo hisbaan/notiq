@@ -7,7 +7,8 @@ package com.hisbaan.notiq.core
  * checkout") is rejected unless something says it's a one-time code.
  */
 object OtpExtractor {
-    fun extract(text: String): String? {
+    fun extract(message: String): String? {
+        val text = clean(message)
         val keywords = keywords(text)
         if (keywords.isEmpty()) return null
         if (MARKETING.containsMatchIn(text) && !STRONG.containsMatchIn(text)) return null
@@ -21,7 +22,7 @@ object OtpExtractor {
     private fun keywords(text: String): List<IntRange> =
         KEYWORD.findAll(text)
             .filterNot { it.value.lowercase() in NOT_CODE_WORDS }
-            .filterNot { NOT_CODE_BEFORE.containsMatchIn(text.substring(0, it.range.first)) }
+            .filterNot { NOT_CODE_BEFORE.containsMatchIn(before(text, it.range.first)) }
             .map { it.range }
             .toList()
 
@@ -30,6 +31,11 @@ object OtpExtractor {
         val code = match.groupValues[1]
         val digitsOnly = code.all { it.isDigit() || it == ' ' || it == '-' }
         if (!digitsOnly && (code.none { it.isDigit() } || code.none { it.isLetter() })) return null
+        val before = before(text, match.range.first)
+        // "Order number 482913", "Invoice no. 482913", "Booking reference: 4829AB".
+        if (LABELLED.containsMatchIn(before)) return null
+        // A US zip code after the state, in an address (email footers).
+        if (digitsOnly && code.length == 5 && ZIP_STATE.containsMatchIn(before)) return null
 
         val nearest = keywords.minBy { distance(it, match.range) }
         val distance = distance(nearest, match.range)
@@ -43,6 +49,15 @@ object OtpExtractor {
         return score
     }
 
+    /** Up to [LOOK_BEHIND] chars before [index]: enough for the words labelling what follows. */
+    private fun before(text: String, index: Int): String = text.substring((index - LOOK_BEHIND).coerceAtLeast(0), index)
+
+    /**
+     * HTML email turned into text: non-breaking and other fixed spaces between digit groups, and
+     * zero-width characters (preview text padding, soft hyphens) anywhere, even inside a code.
+     */
+    private fun clean(text: String): String = text.replace(INVISIBLE, "").replace(FIXED_SPACE, " ")
+
     private fun distance(keyword: IntRange, candidate: IntRange): Int = when {
         keyword.last < candidate.first -> candidate.first - keyword.last - 1
         candidate.last < keyword.first -> keyword.first - candidate.last - 1
@@ -53,6 +68,16 @@ object OtpExtractor {
     private fun normalize(match: MatchResult): String = match.groupValues[1].filterNot { it == ' ' || it == '-' }
 
     private const val MAX_DISTANCE = 80
+    private const val LOOK_BEHIND = 40
+
+    private val INVISIBLE = Regex("[\u200B-\u200D\u2060\uFEFF\u034F\u00AD]")
+    private val FIXED_SPACE = Regex("[\u00A0\u2007\u202F]")
+
+    private val LABELLED = Regex(
+        """(?i)\b(?:order|invoice|receipt|reference|ref|booking|reservation|ticket|tracking|account|acct|member(?:ship)?|""" +
+            """customer|case|transaction|confirmation)\s*(?:number|no\.?|#|id)?\s*[:#]?\s*$""",
+    )
+    private val ZIP_STATE = Regex("""\b[A-Z]{2}\s$""")
 
     private val KEYWORD = Regex(
         """(?i)\b(?:otp|pin|2fa|mfa|tan|passcode|log[- ]?in|sign[- ]?in|one[- ]time)\b""" +
@@ -78,8 +103,8 @@ object OtpExtractor {
 
     /** Says it's an authentication code, beyond the word "code". */
     private val STRONG = Regex(
-        """(?i)\b(?:otp|2fa|mfa|one[- ]time|passcode|verif\p{L}*|authenti\p{L}*|security code|log[- ]?in|sign[- ]?in|""" +
-            """(?:do not|don'?t|never) share)""",
+        // Not "sign in": nearly every email has a "sign in to your account" link.
+        """(?i)\b(?:otp|2fa|mfa|one[- ]time|passcode|verif\p{L}*|authenti\p{L}*|security code|(?:do not|don'?t|never) share)""",
     )
 
     /** Promotions, which also say "code". */

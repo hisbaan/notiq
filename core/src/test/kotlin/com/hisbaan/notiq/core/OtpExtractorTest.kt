@@ -103,6 +103,56 @@ class OtpExtractorTest {
     }
 
     @Test
+    fun `email bodies`() {
+        assertEquals(
+            "482913",
+            code(
+                "Your GitHub launch code\n[GitHub] Please verify your device\nHey hisbaan!\n" +
+                    "A sign in attempt requires further verification because we did not recognize your device. " +
+                    "To complete the sign in, enter the verification code on the unrecognized device.\n" +
+                    "Device: Firefox on Android\nVerification code: 482913\n" +
+                    "If you did not attempt to sign in to your account, your password may be compromised. " +
+                    "Visit https://github.com/settings/security to create a new, strong password for your GitHub account.\n" +
+                    "Thanks,\nThe GitHub Team\nGitHub, Inc. ・88 Colin P Kelly Jr Street・San Francisco, CA 94107",
+            ),
+        )
+        assertEquals(
+            "482913",
+            code(
+                "Amazon.com\nVerify your new Amazon account\nTo verify your email address, please use the following " +
+                    "One Time Password (OTP):\n\n482913\n\nDo not share this OTP with anyone. Amazon takes your account " +
+                    "security very seriously. Amazon Customer Service will never ask you to disclose or verify your " +
+                    "Amazon password, OTP, credit card, or banking account number.\n© 2026 Amazon.com, Inc.",
+            ),
+        )
+        assertEquals("482913", code("Epic Games\nYour verification code\nHello,\nHere is your verification code: 482913\nThis code expires in 30 minutes."))
+    }
+
+    @Test
+    fun `invisible characters from html email`() {
+        // Non-breaking space between groups, zero-width padding from a preview text hack.
+        assertEquals("482913", code("Your sign-in code‌​͏ is 482 913."))
+        assertEquals("482913", code("Verification code: 4829​13"))
+    }
+
+    @Test
+    fun `rejects marketing that says sign in`() {
+        assertNull(code("Black Friday deals start now!\nUse code SAVE20 at checkout.\nSign in to your account to see more."))
+    }
+
+    @Test
+    fun `rejects labelled order and account numbers`() {
+        assertNull(code("Thanks for your order!\nOrder number 482913\nSign in to your account to track your package or verify the delivery address."))
+        assertNull(code("Invoice no. 482913 is ready. Log in to your account to view it and verify payment."))
+        assertNull(code("Your booking reference: 4829AB. Verify your details when you sign in."))
+    }
+
+    @Test
+    fun `rejects zip codes in footers`() {
+        assertNull(code("Verify your email preferences any time.\nAcme Inc, 440 N Barranca Ave, Covina, CA 91723"))
+    }
+
+    @Test
     fun `rejects tracking numbers`() {
         assertNull(code("Your package with tracking code 1Z999AA10123456784 has shipped"))
     }
