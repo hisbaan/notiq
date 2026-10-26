@@ -191,12 +191,58 @@ Tasks:
       about 3 s after the message's timestamp.
 - [ ] Not yet tried on the phone: revoke → alarm → re-grant → recovery; clearing while locked
 
-### Phase 2 — Accessibility fill (opt-in)
+### Phase 2 — Fill codes into apps (opt-in)
 
-- [ ] Accessibility service: when a code arrives and the focused field looks like a code
-      field (or within a short window after it gets focus), `ACTION_SET_TEXT`; handle split
-      one-digit boxes. Conservative; never fill password fields.
-- [ ] Test screen with sample code fields
+Design decisions for this phase:
+
+- **Accessibility service** (`fill.FillService`, class name permanent like the listener). Bitwarden
+  keeps the autofill slot. Opt-in: off until the user enables it (Settings, or Shizuku appends
+  it to `enabled_accessibility_services` without touching the others).
+- **Fill mode** (setting, user's call 2026-10-25): *Tap to fill* (default): a "Fill 482913" chip
+  while a likely code field is focused. *Auto when sure*: fill strong matches, chip for weaker
+  ones. *Always auto*: fill any likely match.
+- **Idle unless a code is pending.** The service subscribes to no events until the pipeline
+  offers a code; then focus / window changes for 5 min (codes usually live 5-10 min), until
+  it's filled or the chip is dismissed.
+- **Field detection** (`CodeFieldDetector`, `:core`, pure): the focused editable field's hint,
+  view id, label and content description, numeric input type, max length, editable siblings
+  (split one-digit boxes), and the screen's text. Confidence NONE / LIKELY / SURE:
+  - SURE: split boxes matching the code's length; code words in the field and numeric or
+    max length = code length.
+  - LIKELY: code words in the field; numeric with max length = code length; the screen talks
+    about a code and the field is numeric or the only field on screen.
+  - NONE: password / email / phone / card / search / message fields without code words.
+- **Filling:** `ACTION_SET_TEXT` (one digit per box for split fields), checked by re-reading;
+  else paste (the code goes on the clipboard first).
+- **Finding the field:** the input-focus query answers with the host view for Compose and web
+  views (fields are virtual children), so search under it for the focused editable node. Found
+  on the Try-it screen's Compose field; Firefox works with it too.
+- **Press Enter after filling** (setting, on): after 250 ms, if the filled field still has focus
+  (the app didn't submit by itself), the field's `ACTION_IME_ENTER`, else `input keyevent
+  KEYCODE_ENTER` through Shizuku (web views may lack the action). Once only.
+- **Chip:** `TYPE_ACCESSIBILITY_OVERLAY` window (no overlay permission), just above the
+  keyboard, or below the field without one. Plain Views, system dynamic colours.
+- **Try it** screen: a code field, split boxes (EditTexts with max length 1), a password field
+  and a chat field, plus "Send a test code".
+
+Tasks:
+
+- [x] `:core`: `CodeFieldDetector`, `FillMode` decisions, tests
+- [x] `FillService`, field reading, filler, chip, `FillController` (pending code)
+- [x] Settings: service status (enable via Shizuku or Settings), mode; setup status
+- [x] Try-it screen
+- [x] On the phone (2026-10-25): split boxes and the code field on the Try-it screen, and a real
+      SMS code into Firefox
+- [x] Press Enter after filling (2026-10-25): Firefox has no IME action, so the Shizuku key
+      event (exit 0, submitted); the Try-it fields use their own Done action. Not yet seen: an
+      app that submits by itself (expect "the app moved on by itself").
+- What fields report (Diagnostics):
+  - Firefox: `EditText`, hint = the placeholder ("Verification code"), id from the page,
+    inputType 0xa1 (text, web edit text) whatever the page's `inputmode`, no max length. So
+    code words → LIKELY at best: "Auto when sure" shows the chip there.
+  - Compose `OutlinedTextField`: no hint, no input type, no max length; the label isn't
+    exposed. Found only through the screen's text ("only field"). Follow-up: read labels
+    from nearby text nodes.
 
 ### Later
 
