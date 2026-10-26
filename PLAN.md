@@ -244,9 +244,28 @@ Tasks:
     exposed. Found only through the screen's text ("only field"). Follow-up: read labels
     from nearby text nodes.
 
+### Phase 3 — Email codes
+
+Through mail apps' notifications (Gmail puts the whole email in `EXTRA_BIG_TEXT`, seen in
+Phase 0); IMAP only if notifications turn out not to be enough. The "Email apps" source
+already exists (off by default); this phase is about precision on long bodies full of numbers.
+
+- [x] Extractor: "sign in" / "log in" no longer count as a strong code signal (every email has
+      a "sign in to your account" link, which let "use code SAVE20" through); numbers labelled
+      as something else rejected ("Order number", "Invoice no.", "Booking reference:", ...);
+      US zip codes after a state rejected (footers); zero-width characters removed and
+      non-breaking spaces normalised (HTML email). Tests from GitHub, Amazon, Epic emails.
+- [x] Reader: InboxStyle text lines (Gmail with several new emails) when there's no big text
+- [x] Debug hook `--es action email`: a Gmail-shaped test notification. End to end on the
+      Pixel: GitHub-style email → code copied; marketing email (promo code, order number,
+      address) → nothing.
+- [ ] Real code emails in Gmail: does Android flag them (`sensitive=true`)? If so, the "any
+      app when Android spots a code" source covers them without scanning every email, and
+      "Email apps" can stay off by default.
+- [ ] Decide the "Email apps" default from that
+
 ### Later
 
-- Email codes: via mail-app notifications first; IMAP only if previews aren't enough.
 - Batching: cancel noisy notifications as they arrive, post a digest on a schedule;
   per-app rules. Optionally tap "Mark as read" on the source after copying a code.
 - Desktop sync: QR pairing, end-to-end encrypted push over LAN first, relay later. This is
